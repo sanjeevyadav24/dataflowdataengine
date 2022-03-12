@@ -1,0 +1,32 @@
+# The PROJECT_ID is a cloud build env variable
+steps:
+- id: 'Terraform init'
+  name: 'hashicorp/terraform:0.12.20'
+  dir: 'terraform'
+  entrypoint: 'sh'
+  args:
+    - '-c'
+    - |
+      terraform init -input=false
+      terraform workspace select amplitudedataengine || terraform workspace new amplitudedataengine-demo
+      terraform apply -input=false \
+        -auto-approve
+  waitFor: ['-']
+
+- id: "Build dataflow template"
+  name: maven:3.6.0-jdk-11-slim
+  dir: 'amplitudedataengine'
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      mvn compile exec:java \
+           -Dexec.mainClass=com.analyticqa.amplitude.StarterPipeline \
+           -Dexec.args="--runner=DataflowRunner \
+                        --project=PROJECT_ID \
+                        --stagingLocation=gs://MY-BUCKET-NAME/stage \
+                        --tempLocation=gs://MY-BUCKET-NAME/temp
+                        --gcpTempLocation=gs://MY-BUCKET-NAME/tempbq \
+                        --region=us-west1 \
+                        --templateLocation=gs://MY-BUCKET-NAME/templates/dataflow-demo-template"
+  waitFor: ['Terraform init']
